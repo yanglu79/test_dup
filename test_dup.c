@@ -11,6 +11,8 @@
 #define SO_TOKEN ".so\""
 #define VENDOR_TOKEN "&partition;"
 #define SYSTEM_TOKEN "system"
+#define EXCLUDE_ETC "/etc"
+#define LIB_TOKEN "/lib"
 
 void replace_prefix(unsigned char* string)
 {
@@ -25,14 +27,12 @@ void replace_prefix(unsigned char* string)
             strcpy(p,"data/asan/vendor");
             strcpy(p+16,tail_part);
         }
-  
-        
-        if(p=strstr(string, SYSTEM_TOKEN))
-        {
-            strcpy(tail_part,p+6);
-            strcpy(p,"data/asan/system");
-            strcpy(p+16,tail_part);
-        }
+        else if(p=strstr(string, SYSTEM_TOKEN))
+	     {
+               strcpy(tail_part,p+6);
+               strcpy(p,"data/asan/system");
+               strcpy(p+16,tail_part);
+             }
 
 	return;
 }
@@ -99,7 +99,7 @@ int main()
         if (!strstr(buf,"<x-quic-distributable"))
           write(fd1,buf,ret1+1);
         else
-        if ((p=strstr(buf,"<x-quic-distributable"))&&(*(p+21)==10))//multi-line
+        if ((p=strstr(buf,"<x-quic-distributable"))&&(*(p+21)==10)&&(!strstr(buf,EXCLUDE_ETC)))//multi-line
         {
            write(fd1,buf,ret1+1);
            while((ret2=readline(fd,bufw[0]))&&!strstr(bufw[0],">"))
@@ -118,15 +118,23 @@ int main()
            rets+=ret2;
            //printf("%s",bufs);
            //printf("%s",buf);
+           
+           write(fd1,bufs,strlen(bufs));//original
 
-           write(fd1,bufs,strlen(bufs));
-
-           if (strstr(bufs,SO_TOKEN))
-           {
-            write(fd1,buf,ret1+1);
-            replace_prefix(bufs);
-	    write(fd1,bufs,strlen(bufs));
-           }
+           if (strstr(bufs,SO_TOKEN)&&(!strstr(bufs,EXCLUDE_ETC)))
+             if (strstr(bufs,VENDOR_TOKEN)&&(!strncmp(strstr(bufs,VENDOR_TOKEN)+11,LIB_TOKEN,4)))
+             {
+                write(fd1,buf,ret1+1);
+                replace_prefix(bufs);
+	        write(fd1,bufs,strlen(bufs));
+             }
+             else if (!strstr(bufs,VENDOR_TOKEN))
+                  {
+                    write(fd1,buf,ret1+1);
+                    replace_prefix(bufs);
+                    write(fd1,bufs,strlen(bufs));
+                  }
+           
  	   memset(bufs,0,8192);
            rets=0;
 #if 0
@@ -148,10 +156,10 @@ int main()
   	   }
            
         }
-        else //1-line
+        else //1-line create and dup,replace
            {
 	           write(fd1,buf,ret1+1);
-		   if (strstr(buf,SO_TOKEN))
+		   if (strstr(buf,SO_TOKEN)&&(!strstr(buf,EXCLUDE_ETC)))
                    {
 			//printf("1-line with .so written: %s",buf);
 			replace_prefix(buf);  
